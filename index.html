@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Meeting Scheduler</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash/4.17.21/lodash.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #loginContainer {
+            max-width: 400px;
+            margin: 100px auto;
+            text-align: center;
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+        }
+        .login-form input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .member-form {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .time-slot {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px;
+            background-color: #e8e8e8;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .time-slot.selected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .member-schedule {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .common-times {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1976D2;
+        }
+        .delete-btn {
+            background-color: #f44336;
+            margin-left: 10px;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+        #mainContent {
+            display: none;
+        }
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #757575;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginContainer" class="container">
+        <h1>Team Scheduler Login</h1>
+        <div class="login-form">
+            <input type="password" id="password" placeholder="Enter team password">
+            <button onclick="login()">Login</button>
+        </div>
+    </div>
+
+    <div id="mainContent" class="container">
+        <button class="logout-btn" onclick="logout()">Logout</button>
+        <h1>Team Meeting Scheduler</h1>
+        
+        <div class="member-form">
+            <h3>Add Your Availability</h3>
+            <input type="text" id="memberName" placeholder="Your Name" style="padding: 5px; margin-right: 10px;">
+            <div id="timeSlots" style="margin: 15px 0;">
+                <h4>Select your available time slots:</h4>
+            </div>
+            <button onclick="addMemberSchedule()">Add My Schedule</button>
+        </div>
+
+        <div id="teamSchedules">
+            <h3>Team Members' Schedules</h3>
+        </div>
+
+        <div class="common-times">
+            <h3>Common Available Times</h3>
+            <div id="commonTimeSlots">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set your team password here
+        const TEAM_PASSWORD = "team2024";  // Change this to your desired password
+
+        function login() {
+            const password = document.getElementById('password').value;
+            if (password === TEAM_PASSWORD) {
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                localStorage.setItem('authenticated', 'true');
+                initializeTimeSlots();
+                loadSavedSchedules();
+            } else {
+                alert('Incorrect password. Please try again.');
+            }
+        }
+
+        function logout() {
+            document.getElementById('loginContainer').style.display = 'block';
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('password').value = '';
+            localStorage.removeItem('authenticated');
+        }
+
+        // Check if already logged in
+        window.onload = function() {
+            if (localStorage.getItem('authenticated') === 'true') {
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                initializeTimeSlots();
+                loadSavedSchedules();
+            }
+        };
+
+        const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const timeSlots = [
+            '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
+            '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM',
+            '4:00 PM', '4:30 PM'
+        ];
+        let teamSchedules = [];
+
+        // Initialize time slots
+        function initializeTimeSlots() {
+            const container = document.getElementById('timeSlots');
+            container.innerHTML = '<h4>Select your available time slots:</h4>';
+            weekDays.forEach(day => {
+                const dayDiv = document.createElement('div');
+                dayDiv.innerHTML = `<h4>${day}</h4>`;
+                
+                timeSlots.forEach(time => {
+                    const slot = document.createElement('span');
+                    slot.className = 'time-slot';
+                    slot.textContent = `${day} ${time}`;
+                    slot.onclick = () => toggleTimeSlot(slot);
+                    dayDiv.appendChild(slot);
+                });
+                
+                container.appendChild(dayDiv);
+            });
+        }
+
+        // Toggle time slot selection
+        function toggleTimeSlot(slot) {
+            slot.classList.toggle('selected');
+        }
+
+        // Save schedules to localStorage
+        function saveSchedules() {
+            localStorage.setItem('teamSchedules', JSON.stringify(teamSchedules));
+        }
+
+        // Load saved schedules
+        function loadSavedSchedules() {
+            const saved = localStorage.getItem('teamSchedules');
+            if (saved) {
+                teamSchedules = JSON.parse(saved);
+                displayTeamSchedules();
+                findCommonTimes();
+            }
+        }
+
+        // Add member schedule
+        function addMemberSchedule() {
+            const name = document.getElementById('memberName').value.trim();
+            if (!name) {
+                alert('Please enter your name');
+                return;
+            }
+
+            const selectedSlots = Array.from(document.getElementsByClassName('time-slot selected'))
+                .map(slot => slot.textContent);
+
+            if (selectedSlots.length === 0) {
+                alert('Please select at least one time slot');
+                return;
+            }
+
+            // Add to team schedules
+            teamSchedules.push({ name, availability: selectedSlots });
+            
+            // Update displays
+            displayTeamSchedules();
+            findCommonTimes();
+            saveSchedules();
+            
+            // Reset form
+            document.getElementById('memberName').value = '';
+            Array.from(document.getElementsByClassName('time-slot selected'))
+                .forEach(slot => slot.classList.remove('selected'));
+        }
+
+        // Display team schedules
+        function displayTeamSchedules() {
+            const container = document.getElementById('teamSchedules');
+            container.innerHTML = '<h3>Team Members\' Schedules</h3>';
+
+            teamSchedules.forEach((member, index) => {
+                const memberDiv = document.createElement('div');
+                memberDiv.className = 'member-schedule';
+                memberDiv.innerHTML = `
+                    <h4>${member.name}</h4>
+                    <div>${member.availability.join(', ')}</div>
+                    <button class="delete-btn" onclick="deleteMember(${index})">Delete</button>
+                `;
+                container.appendChild(memberDiv);
+            });
+        }
+
+        // Delete member schedule
+        function deleteMember(index) {
+            teamSchedules.splice(index, 1);
+            displayTeamSchedules();
+            findCommonTimes();
+            saveSchedules();
+        }
+
+        // Find common available times
+        function findCommonTimes() {
+            if (teamSchedules.length === 0) {
+                document.getElementById('commonTimeSlots').innerHTML = 'No schedules added yet';
+                return;
+            }
+
+            // Get all time slots from first member
+            let commonSlots = teamSchedules[0].availability;
+
+            // Find intersection with other members
+            for (let i = 1; i < teamSchedules.length; i++) {
+                commonSlots = commonSlots.filter(slot => 
+                    teamSchedules[i].availability.includes(slot)
+                );
+            }
+
+            // Display results
+            const container = document.getElementById('commonTimeSlots');
+            if (commonSlots.length === 0) {
+                container.innerHTML = 'No common time slots found';
+            } else {
+                container.innerHTML = commonSlots
+                    .sort((a, b) => {
+                        // Sort by day first, then time
+                        const [dayA, timeA] = a.split(' ');
+                        const [dayB, timeB] = b.split(' ');
+                        const dayIndex = weekDays.indexOf(dayA) - weekDays.indexOf(dayB);
+                        if (dayIndex !== 0) return dayIndex;
+                        return timeSlots.indexOf(timeA + ' ' + timeB.split(' ')[1]) - 
+                               timeSlots.indexOf(timeB + ' ' + timeB.split(' ')[1]);
+                    })
+                    .join('<br>');
+            }
+        }
+    </script>
+</body>
+</html>
